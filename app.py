@@ -2,7 +2,9 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from twilio.rest import Client
 from dotenv import load_dotenv
+
 import os
+import requests
 
 load_dotenv()
 
@@ -18,6 +20,12 @@ client = Client(account_sid, auth_token)
 def hello():
     return "Hello, Twilio Plugin!"
 
+
+# Load the Numverify API key from environment variables
+NUMVERIFY_API_KEY = os.getenv('NUMVERIFY_API_KEY')
+NUMVERIFY_API_URL = 'http://apilayer.net/api/validate'
+
+
 # Function to fetch friendly name of a phone number
 def fetch_friendly_name(phone_number):
     numbers = client.incoming_phone_numbers.list()
@@ -26,10 +34,29 @@ def fetch_friendly_name(phone_number):
             return record.friendly_name
     return phone_number  # Return number if no friendly name found
 
-@app.route('/api/friendly-name/<phone_number>', methods=['GET'])
-def get_friendly_name(phone_number):
-    friendly_name = fetch_friendly_name(phone_number)
-    return jsonify({'friendly_name': friendly_name})
+# Endpoint to get the location and friendly name based on the phone number
+@app.route('/api/call-location-name/<phone_number>', methods=['GET'])
+def call_location(phone_number):
+    try:
+        # Call Numverify API to get country and location data
+        params = {
+            'access_key': NUMVERIFY_API_KEY,
+            'number': phone_number,
+        }
+        response = requests.get(NUMVERIFY_API_URL, params=params)
+        data = response.json()
+
+        if response.status_code == 200 and data['valid']:
+            # Get friendly name from the phone number
+            friendly_name = fetch_friendly_name(phone_number)
+            # Extract country name from the response
+            country_name = data.get('country_name', 'Unknown Location')
+            return jsonify({'location': country_name, 'friendly_name': friendly_name})
+        else:
+            return jsonify({'location': 'Unknown Location', 'friendly_name': friendly_name}), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+        
 
 # Fetch recent call logs
 @app.route('/api/call-logs', methods=['GET'])
