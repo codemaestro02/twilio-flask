@@ -14,16 +14,17 @@ CORS(app)
 # Twilio credentials
 account_sid = os.getenv('ACCOUNT_SID')
 auth_token = os.getenv('AUTH_TOKEN')
+
+# Load the Numverify API key from environment variables
+NUMVERIFY_API_KEY = os.getenv('NUMVERIFY_API_KEY')
+NUMVERIFY_API_URL = 'https://api.apilayer.com/number_verification/validate'
+
+
 client = Client(account_sid, auth_token)
 
 @app.route('/api')
 def hello():
     return "Hello, Twilio Plugin!"
-
-
-# Load the Numverify API key from environment variables
-NUMVERIFY_API_KEY = os.getenv('NUMVERIFY_API_KEY')
-NUMVERIFY_API_URL = 'https://api.apilayer.com/number_verification/validate'
 
 
 # Function to fetch friendly name of a phone number
