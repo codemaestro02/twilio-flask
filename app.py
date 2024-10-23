@@ -23,7 +23,7 @@ def hello():
 
 # Load the Numverify API key from environment variables
 NUMVERIFY_API_KEY = os.getenv('NUMVERIFY_API_KEY')
-NUMVERIFY_API_URL = 'http://apilayer.net/api/validate'
+NUMVERIFY_API_URL = 'https://api.apilayer.com/number_verification/validate'
 
 
 # Function to fetch friendly name of a phone number
