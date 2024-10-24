@@ -14,6 +14,7 @@ CORS(app)
 # Twilio credentials
 account_sid = os.getenv('ACCOUNT_SID')
 auth_token = os.getenv('AUTH_TOKEN')
+workspace_sid = os.getenv('TWILIO_WORKSPACE_SID')
 
 # Load the Numverify API key from environment variables
 NUMVERIFY_API_KEY = os.getenv('NUMVERIFY_API_KEY')
@@ -59,19 +60,45 @@ def call_location(phone_number):
         return jsonify({'error': str(e)}), 500
         
 
-# Fetch recent call logs
+# Endpoint to fetch call history
 @app.route('/api/call-logs', methods=['GET'])
-def fetch_past_calls():
-    calls = client.calls.list(limit=20)
-    call_logs = [{
-        "call_sid": call.sid,
-        "to": call.to,
-        "from": call._from,
-        "dateCreated": call.date_created,
-        "duration": call.duration,
-        "start_time": call.start_time
-    } for call in calls]
-    return jsonify(call_logs)
+def get_call_logs():
+    try:
+        calls = client.calls.list(limit=50)  # Fetch the last 50 calls
+
+        call_logs = []
+        for call in calls:
+            call_logs.append({
+                'from': call._from,
+                'to': call.to,
+                'status': call.status,
+                'duration': call.duration,
+                'start_time': str(call.start_time),
+            })
+
+        return jsonify(call_logs)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# Endpoint to fetch task history
+@app.route('/api/task-logs', methods=['GET'])
+def get_task_logs():
+    try:
+        # Fetch the last 50 tasks from TaskRouter
+        tasks = client.taskrouter.workspaces(workspace_sid).tasks.list(limit=50)
+
+        task_logs = []
+        for task in tasks:
+            task_logs.append({
+                'sid': task.sid,
+                'status': task.assignment_status,
+                'created_time': str(task.date_created),
+                'attributes': task.attributes,
+            })
+
+        return jsonify(task_logs)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 # Fetch past SMS messages
 @app.route('/api/sms-logs', methods=['GET'])
