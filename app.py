@@ -1,10 +1,12 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from twilio.rest import Client
+from twilio.twiml.messaging_response import MessagingResponse
 from dotenv import load_dotenv
 
 import os
 import requests
+import logging
 
 load_dotenv()
 
@@ -20,6 +22,8 @@ workspace_sid = os.getenv('TWILIO_WORKSPACE_SID')
 NUMVERIFY_API_KEY = os.getenv('NUMVERIFY_API_KEY')
 NUMVERIFY_API_URL = 'https://api.apilayer.com/number_verification/validate'
 
+# Enable logging
+logging.basicConfig(level=logging.INFO)
 
 client = Client(account_sid, auth_token)
 
@@ -102,7 +106,7 @@ def get_task_logs():
 
 # Fetch past SMS messages
 @app.route('/api/sms-logs', methods=['GET'])
-def fetch_sms_chats():
+def fetch_sms_history():
     messages = client.messages.list(limit=20)
     sms_logs = [{
         "message_sid": message.sid,
@@ -149,6 +153,55 @@ def send_sms():
         return jsonify({'message_sid': message.sid, 'status': 'sent'}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+    
+
+# Webhook to receive incoming SMS
+@app.route('/api/receive-sms', methods=['POST'])
+def receive_sms():
+    try:
+        # Validate incoming request data
+        from_number = request.form.get('From')
+        to_number = request.form.get('To')
+        message_body = request.form.get('Body')        
+
+        # Check if necessary fields are present
+        if not from_number or not to_number or not message_body:
+            logging.error("Invalid data in request: missing From, To, or Body.")
+            return jsonify({
+                "status": "error",
+                "message": "Invalid request. 'From', 'To', and 'Body' fields are required."
+            }), 400
+
+        # Log the incoming SMS details
+        logging.info(f"Received SMS from {from_number} to {to_number}: {message_body}")
+
+        # Handle the incoming message based on the Twilio number (To)
+        # Check if the 'to' number is a valid Twilio number
+        incoming_numbers = client.incoming_phone_numbers.list()
+        valid_numbers = [number.phone_number for number in incoming_numbers]
+        if to_number in valid_numbers:
+            logging.info(f"Handling message for {to_number} from {from_number}: {message_body}")
+            response_message = f"Hello, your message '{message_body[:20]}...' was received by our service number {to_number}"
+        else:
+            # Handle unrecognized Twilio number
+            logging.warning(f"Unrecognized Twilio number: {to_number}")
+            response_message = "Sorry, we couldn't process your message."
+        
+            
+
+        # Prepare the Twilio response (SMS reply)
+        twilio_response = MessagingResponse()
+        twilio_response.message(response_message)
+
+        # Send a successful response to the client
+        return str(twilio_response), 200
+
+    except Exception as e:
+        logging.error(f"Error processing SMS: {e}")
+        return jsonify({
+            "status": "error",
+            "message": "An internal error occurred while processing the SMS."
+        }), 500
 
 # Update agent's status after a missed call
 def configure_agent_online(worker_sid):
