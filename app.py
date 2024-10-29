@@ -38,7 +38,7 @@ def fetch_friendly_name(phone_number):
     for record in numbers:
         if record.phone_number == phone_number:
             return record.friendly_name
-    return phone_number  # Return number if no friendly name found
+    return "Unknown phone number" # Return number if no friendly name found
 
 # Endpoint to get the location and friendly name based on the phone number
 @app.route('/api/call-location-name/<phone_number>', methods=['GET'])
@@ -57,7 +57,7 @@ def call_location(phone_number):
             friendly_name = fetch_friendly_name(phone_number)
             # Extract country name from the response
             country_name = data.get('country_name', 'Unknown Location')
-            return jsonify({'location': country_name, 'friendly_name': friendly_name})
+            return jsonify({'location': country_name, 'friendly_name': friendly_name}), 200
         else:
             return jsonify({'location': 'Unknown Location', 'friendly_name': friendly_name}), 400
     except Exception as e:
@@ -70,17 +70,18 @@ def get_call_logs():
     try:
         calls = client.calls.list(limit=50)  # Fetch the last 50 calls
 
-        call_logs = []
-        for call in calls:
-            call_logs.append({
+        call_logs = [
+            {
                 'from': call._from,
                 'to': call.to,
                 'status': call.status,
                 'duration': call.duration,
                 'start_time': str(call.start_time),
-            })
+            }
+            for call in calls
+        ]
 
-        return jsonify(call_logs)
+        return jsonify(call_logs), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -91,32 +92,36 @@ def get_task_logs():
         # Fetch the last 50 tasks from TaskRouter
         tasks = client.taskrouter.workspaces(workspace_sid).tasks.list(limit=50)
 
-        task_logs = []
-        for task in tasks:
-            task_logs.append({
+        task_logs = [
+            {
                 'sid': task.sid,
                 'status': task.assignment_status,
                 'created_time': str(task.date_created),
                 'attributes': task.attributes,
-            })
+            }
+            for task in tasks
+        ]
 
-        return jsonify(task_logs)
+        return jsonify(task_logs), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 # Fetch past SMS messages
 @app.route('/api/sms-logs', methods=['GET'])
 def fetch_sms_history():
-    messages = client.messages.list(limit=20)
-    sms_logs = [{
-        "message_sid": message.sid,
-        "body": message.body,
-        "from": message.from_,
-        "to": message.to,
-        "status": message.status,
-        "date_sent": message.date_sent
-    } for message in messages]
-    return jsonify(sms_logs)
+    try:
+        messages = client.messages.list(limit=20)
+        sms_logs = [{
+            "message_sid": message.sid,
+            "body": message.body,
+            "from": message.from_,
+            "to": message.to,
+            "status": message.status,
+            "date_sent": message.date_sent
+        } for message in messages]
+        return jsonify(sms_logs)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 # Send SMS messages
 @app.route('/api/send-sms', methods=['POST'])
@@ -138,6 +143,8 @@ def send_sms():
             valid_numbers = [number.phone_number for number in incoming_numbers]
             if from_ not in valid_numbers:
                 return jsonify({'error': 'The provided "from" number is not a valid Twilio number.'}), 400
+            message = client.messages.create(body=body, from_=from_, to=to)
+            return jsonify({'message_sid': message.sid, 'status': 'sent'}), 200
         except Exception as e:
             return jsonify({'error': str(e)}), 500
     else:
@@ -203,19 +210,92 @@ def receive_sms():
             "message": "An internal error occurred while processing the SMS."
         }), 500
 
-# Update agent's status after a missed call
-def configure_agent_online(worker_sid):
-    worker = client.taskrouter.workspaces('your_workspace_sid') \
-                .workers(worker_sid) \
-                .update(activity_sid='online_activity_sid')
-    return worker
+@app.route('/api/agent-status', methods=['POST'])
+def update_agent_status():
+    data = request.get_json()
+    worker_sid = data.get("worker_sid")
+    activity_sid = data.get("activity_sid")  # Activity SID for 'Online' status
 
-# Allow multiple agents for a task
-def allow_multiple_agents(task_sid):
-    task = client.taskrouter.workspaces('your_workspace_sid') \
-                .tasks(task_sid) \
-                .update(assignment_status='pending')
-    return task
+    if not worker_sid or not activity_sid:
+        return jsonify({"error": "worker_sid and activity_sid are required"}), 400
+
+    try:
+        worker = client.taskrouter.workspaces(workspace_sid) \
+                    .workers(worker_sid) \
+                    .update(activity_sid=activity_sid)
+        return jsonify({
+            "worker_sid": worker_sid,
+            "status": "online"
+        }), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/allow-multiple-agents', methods=['POST'])
+def allow_multiple_agents():
+    data = request.get_json()
+    task_sid = data.get("task_sid")
+
+    if not task_sid:
+        return jsonify({"error": "task_sid is required"}), 400
+
+    try:
+        task = client.taskrouter.workspaces(workspace_sid) \
+                    .tasks(task_sid) \
+                    .update(assignment_status='pending')
+        return jsonify({
+            "task_sid": task_sid,
+            "status": "pending"
+        }), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/answer-call', methods=['POST'])
+def answer_call():
+    data = request.get_json()
+    call_sid = data.get("call_sid")
+    worker_sid = data.get("worker_sid")
+
+    if not call_sid or not worker_sid:
+        return jsonify({"error": "call_sid and worker_sid are required"}), 400
+
+    try:
+        call = client.calls(call_sid).update(status='in-progress')  # Set call status to "in-progress" to answer
+        return jsonify({
+            "call_sid": call_sid,
+            "status": "answered"
+        }), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/update-call-history', methods=['POST'])
+def update_call_history():
+    data = request.get_json()
+    call_sid = data.get("call_sid")
+    call_details = {
+        "from": data.get("from"),
+        "to": data.get("to"),
+        "status": data.get("status"),
+        "duration": data.get("duration"),
+        "start_time": data.get("start_time")
+    }
+
+    # Check if essential fields are provided
+    if not call_sid or not call_details["from"] or not call_details["to"]:
+        return jsonify({"error": "call_sid, from, and to are required"}), 400
+
+    try:
+        # Assuming update_call_history_db is a custom function for updating call history in your database
+        update_call_history_db(call_sid, call_details)
+        return jsonify({
+            "status": "call history updated",
+            "call_sid": call_sid
+        }), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 
 if __name__ == '__main__':
     app.run(debug=True)
