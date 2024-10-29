@@ -286,8 +286,6 @@ def update_call_history():
         return jsonify({"error": "call_sid, from, and to are required"}), 400
 
     try:
-        # Assuming update_call_history_db is a custom function for updating call history in your database
-        update_call_history_db(call_sid, call_details)
         return jsonify({
             "status": "call history updated",
             "call_sid": call_sid
