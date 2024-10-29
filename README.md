@@ -176,4 +176,109 @@ Below is a structured outline of the expected requests and responses for each AP
             "message": "An internal error occurred while processing the SMS."
          }
          ```
+---
 
+### **8. `POST /api/agent-status`**
+   - **Description**: Updates the agent’s status (e.g., setting an agent online after a missed call).
+   - **Request Body**:
+      ```json
+      {
+         "worker_sid": "worker_sid_value",
+         "activity_sid": "online_activity_sid"
+      }
+      ```
+   - **Response**:
+      - **Success (200)**:
+         ```json
+         {
+            "worker_sid": "worker_sid_value",
+            "status": "online"
+         }
+         ```
+      - **Error (500)**: Server error with exception details.
+         ```json
+         {
+            "error": "Error details"
+         }
+         ```
+
+---
+
+### **9. `POST /api/allow-multiple-agents`**
+   - **Description**: Sets a task to allow multiple agents to work on it simultaneously.
+   - **Request Body**:
+      ```json
+      {
+         "task_sid": "task_sid_value"
+      }
+      ```
+   - **Response**:
+      - **Success (200)**:
+         ```json
+         {
+            "task_sid": "task_sid_value",
+            "status": "pending"
+         }
+         ```
+      - **Error (500)**: Server error with exception details.
+         ```json
+         {
+            "error": "Error details"
+         }
+         ```
+
+---
+
+### **10. `POST /api/answer-call`**
+   - **Description**: Answers an incoming call and routes it to an available agent or specific workflow.
+   - **Request Body**:
+      ```json
+      {
+         "call_sid": "call_sid_value",
+         "worker_sid": "worker_sid_value"
+      }
+      ```
+   - **Response**:
+      - **Success (200)**:
+         ```json
+         {
+            "call_sid": "call_sid_value",
+            "status": "answered"
+         }
+         ```
+      - **Error (500)**: Server error with exception details.
+         ```json
+         {
+            "error": "Error details"
+         }
+         ```
+
+---
+
+### **11. `POST /api/update-call-history`**
+   - **Description**: Updates the call history database with details of an answered call.
+   - **Request Body**:
+      ```json
+      {
+         "call_sid": "call_sid_value",
+         "from": "+1234567890",
+         "to": "+0987654321",
+         "status": "completed",
+         "duration": "60",
+         "start_time": "2024-10-27T12:00:00Z"
+      }
+      ```
+   - **Response**:
+      - **Success (200)**:
+         ```json
+         {
+            "status": "call history updated",
+            "call_sid": "call_sid_value"
+         }
+         ```
+      - **Error (500)**: Server error with exception details.
+         ```json
+         {
+            "error": "Error details"
+         }
+         ```
